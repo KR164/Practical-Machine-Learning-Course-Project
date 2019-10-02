@@ -1,0 +1,105 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Karen Reijneveld"
+date: "2 October 2019"
+output: html_document
+---
+
+The assignment in this project is to use the Weight Lifting Exercise dataset to make a prediction model that correctly classifies how well barbell lifts are performed. 
+
+The WLE dataset consists of  
+
+* a training set with 19622 observations  
+* a test set with 20 observations 
+
+The data is collected from accelerometers on the belt, forearm, arm, and dumbell of 6 participants doing barbell lifts. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways:  
+
+* A: exactly according to the specification 
+* B: throwing the elbows to the front   
+* C: lifting the dumbell only halfway 
+* D: lowering the dumbell onlyt halfway 
+* E: throwing the hips to the front 
+
+These are the 5 classes that have to be predicted for the test set. 
+
+First, I downloaded the data:
+
+```{r downloaddata, cache = TRUE}
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+testing <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+Exploring the data, I found out that only 93 of 160 variables are present for all observations in the training set. Only 406 (of 19622) observations are complete cases. In the test set only 60 variables are available for all 20 observations. The variable 'classe' is (of course) only available in the training set and not in the test set.
+
+Some of the code I used for exploration:
+```{r exploring, cache = TRUE}
+#counting complete cases
+sum(complete.cases(training))
+#counting variables that (do not) contain missing values
+table(sapply(training, function(x) sum(is.na(x)==0)))
+```
+
+I was considering how to deal with the missing values: replacing them with mean/mode, or with a constant, or using classifier models to predict them? Fortunately I tried to find out more about the dataset first. 
+
+I did not find a codebook, but in the article "Qualitative Activity Recognition of Weight Lifting Exercises" (Velloso, 2013), I found out that only 36 variables contain the raw data from the sensors on the belt, forearm, arm and dumbell. Therefore I made a subset of the training and testing data sets:
+
+```{r subset, cache = TRUE} 
+variables <- c("gyros_belt_x","gyros_belt_y","gyros_belt_z",
+                "accel_belt_x","accel_belt_y","accel_belt_z",
+                "magnet_belt_x", "magnet_belt_y","magnet_belt_z", 
+               "gyros_arm_x", "gyros_arm_y", "gyros_arm_z", 
+               "accel_arm_x", "accel_arm_y", "accel_arm_z",  
+               "magnet_arm_x", "magnet_arm_y","magnet_arm_z",  
+               "gyros_dumbbell_x", "gyros_dumbbell_y", "gyros_dumbbell_z",
+               "accel_dumbbell_x", "accel_dumbbell_y", "accel_dumbbell_z",
+               "magnet_dumbbell_x", "magnet_dumbbell_y","magnet_dumbbell_z",                      "gyros_forearm_x","gyros_forearm_y","gyros_forearm_z",
+               "accel_forearm_x","accel_forearm_y","accel_forearm_z",         
+                "magnet_forearm_x", "magnet_forearm_y","magnet_forearm_z")
+trainingB <- training[,c(variables,  "classe")]
+testingB <- testing[,variables]
+```
+
+##Building the model
+With the subset of the training set, I built a model using the caret package. The model has to be used for the classification of more than 2 classes, therefore a glm model is not possible. I decided to test my computer and try Random Forests, because they are often very accurate and we have to give an accurate answer in the Course Project Prediction Quiz. That Random Forest are not easy to interpret, is not a problem for this assignment. 
+
+```{r buildmodel, cache = TRUE}
+set.seed(2345)
+library(caret)
+control <- trainControl(method='cv', number=5)
+fit <- train(classe ~. , data= trainingB, 
+             method = "rf", 
+             trControl = control)
+fit
+```
+
+##Cross Validation
+I used k=5-fold cross validation for training the model. So the rf-model was trained 5 times on 80% of the training set, and tested on 20% of the training set (the 20% being a different part of the data every time). 
+
+Afterwards, I was wondering if I should have done something with the fact that the dataset is ordered. This is visible if you plot a variable by index, coloring it by the name of the participant or by classe.
+```{r checkdataorder, cache = TRUE}
+plot(training$gyros_belt_x, col = training$user_name)
+plot(training$gyros_belt_x, col = training$classe)
+```
+
+From the graphs, I would conclude that randomizing the data might be better, but I already knew that the 5-fold cross validation had the correct prediction results on the test data (and my time is limited). 
+
+##The expected out of sample error
+The accuracy on the training data is 98.92%. So you would expect the out of sample error is 1.8%. 
+
+##Prediction of the 20 test cases
+On the test set, the result is 100% accuracy (based on my result in the Course Project Prediction Quiz). This is the code I used for the prediction. 
+```{r predication, eval = FALSE}
+pred <- predict(fit$finalModel, testingB )
+```
+
+And these are the predicted classes that came from this code. 
+```{r correctresult, echo = FALSE}
+pred <- as.factor(c("B","A","B","A","A","E","D","B","A","A","B","C","B","A","E","E","A","B","B","B"))
+pred
+```
+
+##My choices
+I would have preferred to try out a lot more, but my computer is taking a long time for calculations and parallell processing (as described [here](https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-randomForestPerformance.md)) is not possible. 
+
+##Reference
+Velloso"," E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013. 
